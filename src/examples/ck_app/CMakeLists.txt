@@ -3,5 +3,6 @@ px4_add_module(
 	MAIN test_app
 	SRCS
 		test_app.cpp
+		ck_filters.cpp
 	DEPENDS
 	)

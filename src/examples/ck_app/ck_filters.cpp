@@ -1,8 +1,5 @@
-#include <vector>
 #include <math.h>
 #include "ck_filters.h"
-
-using std::vector;
 
 double CK_Fun::lowPassFilter(double dt, double tconst, double uk, double ykm1) {
 // First order low pass filter
@@ -16,15 +13,15 @@ return (1 - a)*ykm1 + a*uk;
 
 }
 
-vector<double> CK_Fun::unitCrossProduct(vector<double> x, vector<double> y) {
-	// x and y are vectors in R^3
-	// returns a unit vector
-	double s1 = x[1]*y[2] - x[2]*y[1];
-	double s2 = x[2]*y[0] - x[0]*y[2];
-	double s3 = x[0]*y[1] - x[1]*y[0];
+// vector<double> CK_Fun::unitCrossProduct(vector<double> x, vector<double> y) {
+// 	// x and y are vectors in R^3
+// 	// returns a unit vector
+// 	double s1 = x[1]*y[2] - x[2]*y[1];
+// 	double s2 = x[2]*y[0] - x[0]*y[2];
+// 	double s3 = x[0]*y[1] - x[1]*y[0];
 
-	double norm = sqrt(s1*s1 + s2*s2 + s3*s3);
+// 	double norm = sqrt(s1*s1 + s2*s2 + s3*s3);
 
-	return {s1 / norm, s2 / norm, s3 / norm};
+// 	return {s1 / norm, s2 / norm, s3 / norm};
 
-}
+// }

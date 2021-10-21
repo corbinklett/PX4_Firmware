@@ -8,10 +8,11 @@
 #include <uORB/topics/sensor_accel.h>
 // #include <uORB/topics/vehicle_attitude.h> // to compare results
 #include <poll.h>
-#include <vector>
+#include <matrix/math.hpp>
+#include <math.h>
 #include "ck_filters.h"
 
-using std::vector;
+#define PI 3.14159
 
 extern "C" __EXPORT int test_app_main(int argc, char *argv[]);
 
@@ -48,7 +49,28 @@ int test_app_main(int argc, char *argv[])
 	double dt_gps, dt_mag, dt_omega, dt_accel;
 	double gps_t{0.0}, mag_t{0.0}, omega_t{0.0}, accel_t{0.0};
 
-	double accel_x_prev{0.0};
+	double accel_x_prev{0.0}, accel_y_prev{0.0}, accel_z_prev{0.0};
+	matrix::Vector3<double> acceleration(0.0,0.0,0.0);
+
+	double mag_x_prev{0.0}, mag_y_prev{0.0}, mag_z_prev{0.0};
+	matrix::Vector3<double> magnet(0.0,0.0,0.0);
+
+	bool new_accel{false};
+	bool new_mag{false};
+
+	// NED (unit) vectors in body frame
+	matrix::Vector3<double> X_b;
+	matrix::Vector3<double> Y_b;
+	matrix::Vector3<double> Z_b;
+
+	// body frame
+	matrix::Vector3<double> i_hat{1.0,0.0,0.0};
+	matrix::Vector3<double> j_hat{0.0,1.0,0.0};
+	matrix::Vector3<double> k_hat{0.0,0.0,1.0};
+
+
+	double pitch, heading;
+
 
 
 	//for (int i = 0; i < 1000; i++) {
@@ -75,13 +97,19 @@ int test_app_main(int argc, char *argv[])
 							// PX4_INFO("GPS timestamp %f", dt_gps);
 							break;
 						case 1: // Mag
+							new_mag = true;
 							orb_copy(ORB_ID(sensor_mag), mag_fd, &raw_mag);
 							mag_x = (double)raw_mag.x;
 							mag_y = (double)raw_mag.y;
 							mag_z = (double)raw_mag.z;
 							dt_mag = ((double)raw_mag.timestamp - mag_t)/1e6;
 							mag_t = (double)raw_mag.timestamp;
-							//PX4_INFO("Mag reading: %8.4f", (double)raw_mag.x);
+							magnet(0) = CK_Fun::lowPassFilter(dt_mag, 10*dt_mag, mag_x, mag_x_prev);
+							mag_x_prev = mag_x;
+							magnet(1) = CK_Fun::lowPassFilter(dt_mag, 10*dt_mag, mag_y, mag_y_prev);
+							mag_y_prev = mag_y;
+							magnet(2) = CK_Fun::lowPassFilter(dt_mag, 10*dt_mag, mag_z, mag_z_prev);
+							mag_z_prev = mag_z;
 							break;
 						case 2: // Gyro
 							orb_copy(ORB_ID(sensor_gyro), gyro_fd, &raw_gyro);
@@ -93,17 +121,22 @@ int test_app_main(int argc, char *argv[])
 							// PX4_INFO("Gyro %8.4f", (double)raw_gyro.x);
 							break;
 						case 3: // Accel
+							new_accel = true;
 							orb_copy(ORB_ID(sensor_accel), accel_fd, &raw_accel);
 							accel_x = raw_accel.x;
 							accel_y = raw_accel.y;
 							accel_z = raw_accel.z;
 							dt_accel = ((double)raw_accel.timestamp - accel_t)/1e6;
 							accel_t = (double)raw_accel.timestamp;
-							PX4_INFO("ACCEL X: %8.4f", (double)raw_accel.x);
-							PX4_INFO("ACCEL DT: %f", dt_accel);
-							double accel_x_lpf = CK_Fun::lowPassFilter(dt_accel, 10*dt_accel, accel_x, accel_x_prev);
+							//PX4_INFO("ACCEL X: %8.4f", (double)raw_accel.x);
+							//PX4_INFO("ACCEL DT: %f", dt_accel);
+							acceleration(0) = CK_Fun::lowPassFilter(dt_accel, 10*dt_accel, accel_x, accel_x_prev);
 							accel_x_prev = accel_x;
-							PX4_INFO("Filtered accel: %f", accel_x_lpf);
+							acceleration(1) = CK_Fun::lowPassFilter(dt_accel, 10*dt_accel, accel_y, accel_y_prev);
+							accel_y_prev = accel_y;
+							acceleration(2) = CK_Fun::lowPassFilter(dt_accel, 10*dt_accel, accel_z, accel_z_prev);
+							accel_z_prev = accel_z;
+							// PX4_INFO("Filtered accel: %f", acceleration(2));
 							break;
 					}
 
@@ -111,8 +144,35 @@ int test_app_main(int argc, char *argv[])
 					// figure out how to put different sensors together
 					// update attitude and position estimate here
 
-					// filter data first
-					CK_Fun::unitCrossProduct(vector<double> x, vector<double> y);
+					if (new_mag || new_accel) {
+						Y_b = magnet.cross(acceleration);
+						Y_b = Y_b.normalized();
+						X_b = Y_b.cross(-acceleration);
+						X_b = X_b.normalized();
+						Z_b = X_b.cross(Y_b);
+						Z_b = Z_b.normalized();
+						// PX4_INFO("X_b x coordinate: %f", X_b(0));
+						// PX4_INFO("X_b y coordinate: %f", X_b(1));
+						// PX4_INFO("X_b z coordinate: %f", X_b(2));
+
+						// find roll-pitch-yaw
+
+						// Roll Angle
+						double roll = asin(j_hat.dot(Z_b));
+						PX4_INFO("Roll angle (radians): %f", roll);
+
+
+						// Pitch
+
+						double pitch = acos(Z_b(2));
+						//PX4_INFO("Pitch angle (radians): %f", pitch);
+
+						// heading: rotated X_b by pitch angle about Y_b
+
+
+
+					}
+					// find NED frame expressed in body frame
 					// direction cosines
 
 					// find the quaternion using mag vec and accel vec
@@ -122,6 +182,10 @@ int test_app_main(int argc, char *argv[])
 					// combine those two
 
 					// position with gps (& integrated accel?)
+
+					// reset bool values
+					new_accel = false;
+					new_mag = false;
 
 					}
 				}
@@ -136,3 +200,6 @@ int test_app_main(int argc, char *argv[])
 // Notes:
 // This does not add additional time to dt to account for the time to
 // extract the sensor data
+// dt changes every time step, and this may effect the filter
+
+// filter out magnetic disturbances

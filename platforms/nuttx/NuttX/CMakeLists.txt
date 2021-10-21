@@ -307,6 +307,8 @@ function(add_nuttx_dir nuttx_lib nuttx_lib_dir kernel extra)
 	set_property(TARGET nuttx_${nuttx_lib} PROPERTY IMPORTED_LOCATION ${NUTTX_DIR}/${nuttx_lib_dir}/lib${nuttx_lib}.a)
 	add_dependencies(nuttx_build nuttx_${nuttx_lib}_build)
 	target_link_libraries(nuttx_build INTERFACE nuttx_${nuttx_lib})
+
+
 endfunction()
 
 # add_nuttx_dir(NAME DIRECTORY KERNEL EXTRA)

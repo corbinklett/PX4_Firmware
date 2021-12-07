@@ -1,15 +1,21 @@
 #include <px4_platform_common/log.h>
 #include <px4_platform_common/app.h>
 #include <px4_platform_common/posix.h>
-//#include <uORB/topics/sensor_combined.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <uORB/uORB.h>
+
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/sensor_mag.h>
 #include <uORB/topics/sensor_gyro.h>
 #include <uORB/topics/sensor_accel.h>
+#include <uORB/topics/debug_key_value.h>
 // #include <uORB/topics/vehicle_attitude.h> // to compare results
 #include <poll.h>
 #include <matrix/math.hpp>
 #include <math.h>
+#include <ctime>
+#include <string.h>
 #include "ck_filters.h"
 
 #define PI 3.14159
@@ -20,11 +26,18 @@ int test_app_main(int argc, char *argv[])
 {
 	PX4_INFO("Testing Attitude Estimator");
 
+	time_t start, finish;
+	double time_diff;
+
 	// subscribe to topics
 	int gps_fd = orb_subscribe(ORB_ID(sensor_gps));
 	int mag_fd = orb_subscribe(ORB_ID(sensor_mag));
 	int gyro_fd = orb_subscribe(ORB_ID(sensor_gyro));
 	int accel_fd = orb_subscribe(ORB_ID(sensor_accel));
+
+	/* advertise named debug value */
+	struct debug_key_value_s dbg_key;
+	orb_advert_t pub_dbg_key = orb_advertise(ORB_ID(debug_key_value), &dbg_key);
 
 	// limit update rate
 	// orb_set_interval(sensor_sub_fd, 200);
@@ -58,7 +71,7 @@ int test_app_main(int argc, char *argv[])
 	bool new_accel{false};
 	bool new_mag{false};
 
-	// NED (unit) vectors in body frame
+	// NED (unit) vectors expressed in body frame
 	matrix::Vector3<double> X_b;
 	matrix::Vector3<double> Y_b;
 	matrix::Vector3<double> Z_b;
@@ -71,10 +84,14 @@ int test_app_main(int argc, char *argv[])
 
 	double pitch, heading;
 
-
-
 	//for (int i = 0; i < 1000; i++) {
+	time(&start);
+
 	while (true) {
+
+	time(&finish);
+	time_diff = difftime(finish, start);
+
 		// wait for update of 4 fds for 1000ms
 		int poll_ret = px4_poll(fds, 4, 1000);
 
@@ -136,7 +153,11 @@ int test_app_main(int argc, char *argv[])
 							accel_y_prev = accel_y;
 							acceleration(2) = CK_Fun::lowPassFilter(dt_accel, 10*dt_accel, accel_z, accel_z_prev);
 							accel_z_prev = accel_z;
-							// PX4_INFO("Filtered accel: %f", acceleration(2));
+							//if (time_diff >= 0.1) {
+					 			//PX4_INFO("accel x: %f\ty: %f\tz: %f", acceleration(0), acceleration(1), acceleration(2));
+								//time(&start);
+							//}
+							//PX4_INFO("Filtered accel: %f", acceleration(2));
 							break;
 					}
 
@@ -157,18 +178,32 @@ int test_app_main(int argc, char *argv[])
 
 						// find roll-pitch-yaw
 
-						// Roll Angle
+						// Roll Angle - angle between j_hat and X_b-Y_b plane
+						// roll = acos(pi/2 - )
 						double roll = asin(j_hat.dot(Z_b));
-						PX4_INFO("Roll angle (radians): %f", roll);
+						if (time_diff >= 0.5) {
+					 		PX4_INFO("Roll angle (radians): %f", roll);
+							time(&start);
+						}
 
+						strncpy(dbg_key.key, "roll", 10);
+						dbg_key.value = roll;
 
-						// Pitch
+						// publish
+						orb_publish(ORB_ID(debug_key_value), pub_dbg_key, &dbg_key);
 
-						double pitch = acos(Z_b(2));
+						// Pitch - 1-rotation of body frame by roll, then pitch is angle between i_hat_rot and X_b-Y_b plane
+						double pitch = asin(i_hat.dot(Z_b));
 						//PX4_INFO("Pitch angle (radians): %f", pitch);
 
 						// heading: rotated X_b by pitch angle about Y_b
+						double heading =
 
+						strncpy(dbg_key.key, "pitch", 10);
+						dbg_key.value = pitch;
+
+						// publish
+						orb_publish(ORB_ID(debug_key_value), pub_dbg_key, &dbg_key);
 
 
 					}

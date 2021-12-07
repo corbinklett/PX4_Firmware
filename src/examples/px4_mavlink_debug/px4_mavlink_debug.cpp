@@ -52,6 +52,7 @@
 #include <uORB/topics/debug_value.h>
 #include <uORB/topics/debug_vect.h>
 #include <uORB/topics/debug_array.h>
+#include <uORB/topics/ck_vehicle_state.h>
 
 extern "C" __EXPORT int px4_mavlink_debug_main(int argc, char *argv[]);
 
@@ -64,6 +65,10 @@ int px4_mavlink_debug_main(int argc, char *argv[])
 	strncpy(dbg_key.key, "velx", 10);
 	dbg_key.value = 0.0f;
 	orb_advert_t pub_dbg_key = orb_advertise(ORB_ID(debug_key_value), &dbg_key);
+
+	struct ck_vehicle_state_s state_estimator;
+	state_estimator.roll_body = 2.34f;
+	orb_advert_t pub_state_estimator = orb_advertise(ORB_ID(ck_vehicle_state), &state_estimator);
 
 	/* advertise indexed debug value */
 	struct debug_value_s dbg_ind;
@@ -94,6 +99,12 @@ int px4_mavlink_debug_main(int argc, char *argv[])
 		dbg_key.value = value_counter;
 		dbg_key.timestamp = timestamp_us;
 		orb_publish(ORB_ID(debug_key_value), pub_dbg_key, &dbg_key);
+
+		// assign values to state_estimator struct here:
+		state_estimator.timestamp = timestamp_us;
+		state_estimator.roll_body = 2.34f;
+		// publish
+		orb_publish(ORB_ID(ck_vehicle_state), pub_state_estimator, &state_estimator);
 
 		/* send one indexed value */
 		dbg_ind.value = 0.5f * value_counter;
